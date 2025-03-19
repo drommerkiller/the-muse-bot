@@ -1,45 +1,75 @@
 /**
- * Utility to securely get the Gemini API key
+ * API utilities for interacting with AI services
  */
 
 /**
- * Fetches a secure API key from the server or environment
- * In development: Uses environment variable directly
- * In production: Fetches from secure API endpoint
+ * Interface for the Gemini API request
  */
-export async function getSecureApiKey(): Promise<string> {
-  console.log('🔑 Getting API key');
+interface GeminiRequest {
+  prompt: string;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
 
-  // For local development, use the environment variable directly
+/**
+ * Interface for the Gemini API response
+ */
+interface GeminiResponse {
+  text: string;
+  model: string;
+}
+
+/**
+ * Generates content using Gemini API
+ * - In development: Uses environment variable directly with Google's API
+ * - In production: Uses the proxy API endpoint
+ */
+export async function generateWithGemini(
+  request: GeminiRequest
+): Promise<string> {
+  console.log('🔄 Generating content with Gemini', {
+    prompt: request.prompt.substring(0, 50) + '...',
+    model: request.model
+  });
+
+  // For local development, use the API directly
   if (import.meta.env.DEV) {
-    console.log('🔧 Using local environment variable (DEV mode)');
-    const localApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    console.log('🔧 Using direct API call (DEV mode)');
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
     
-    if (!localApiKey) {
-      console.error('❌ VITE_GEMINI_API_KEY not found in environment');
-      throw new Error('API key not configured in local environment');
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error('VITE_GEMINI_API_KEY not found in environment');
     }
     
-    return localApiKey;
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: request.model || 'gemini-1.0-pro',
+      generationConfig: {
+        temperature: request.temperature || 0.7,
+        maxOutputTokens: request.maxTokens || 1024,
+      }
+    });
+    
+    const result = await model.generateContent(request.prompt);
+    const response = await result.response;
+    return response.text();
   }
   
-  // For production, use the secure API endpoint
-  console.log('🔄 Using secure API endpoint (PRODUCTION)');
+  // For production, use the proxy API endpoint
+  console.log('🔄 Using proxy API endpoint (PRODUCTION)');
   try {
-    // Make the fetch with better error handling
-    console.log('🔄 Fetching from /api/gemini');
-    
-    // Try with absolute URL first
     const baseUrl = window.location.origin;
     const apiEndpoint = `${baseUrl}/api/gemini`;
     console.log('📍 API Endpoint:', apiEndpoint);
     
     const response = await fetch(apiEndpoint, {
-      method: 'GET', // Using GET for simplicity
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      cache: 'no-store'
+      body: JSON.stringify(request)
     });
 
     console.log('📥 Response received:', { 
@@ -50,21 +80,33 @@ export async function getSecureApiKey(): Promise<string> {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
-      console.error('❌ API key fetch failed:', response.status, response.statusText, errorText);
-      throw new Error(`Failed to get API key: ${response.status}`);
+      console.error('❌ API request failed:', response.status, response.statusText, errorText);
+      throw new Error(`Failed to generate content: ${response.status}`);
     }
 
-    const data = await response.json();
-    
-    if (!data.apiKey) {
-      console.error('❌ No API key in response', data);
-      throw new Error('API key not found in response');
-    }
-    
-    console.log('✅ API key successfully retrieved');
-    return data.apiKey;
+    const data = await response.json() as GeminiResponse;
+    console.log('✅ Content successfully generated');
+    return data.text;
   } catch (error) {
-    console.error('🚨 Error getting secure API key:', error);
+    console.error('🚨 Error generating content:', error);
     throw error;
   }
-} 
+};
+
+/**
+ * Legacy function - maintained for compatibility
+ * @deprecated Use generateWithGemini instead
+ */
+export async function getSecureApiKey(): Promise<string> {
+  console.warn('⚠️ getSecureApiKey is deprecated, use generateWithGemini instead');
+  
+  if (import.meta.env.DEV) {
+    const localApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!localApiKey) {
+      throw new Error('API key not configured in local environment');
+    }
+    return localApiKey;
+  }
+  
+  throw new Error('This function is deprecated in production. Use generateWithGemini instead.');
+}

@@ -1,7 +1,7 @@
 {
-  "name": "ai-idea-generator",
-  "private": true,
-  "version": "0.0.0",
+  "name": "ai-idea-generator-api",
+  "version": "1.0.0",
+  "description": "API functions for AI Idea Generator",
   "type": "module",
   "scripts": {
     "dev": "vite",

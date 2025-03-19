@@ -1,7 +1,7 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+// Import the Google Generative AI library using ES module syntax
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Simple in-memory rate limiting
-// For production-scale, consider using Redis or a dedicated service
+// Rate limiting setup
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute window
 const MAX_REQUESTS_PER_WINDOW = 10; // 10 requests per minute
 const requestLog = {};
@@ -24,121 +24,154 @@ const isRateLimited = (ip) => {
   return false;
 };
 
-// Origin validation with better support for Vercel preview deployments
-const allowedOrigins = [
-  // Production URL
-  'https://idea-generator-seven.vercel.app',
-  // Match any Vercel preview URL for your project
-  /^https:\/\/idea-generator-[a-z0-9-]+-silmu\.vercel\.app$/,
-  // Allow any localhost URL (for development)
-  /^https?:\/\/localhost(:\d+)?$/
-];
-
-// Enhanced environment detection
-const isProduction = process.env.VERCEL_ENV === 'production';
-const isPreview = process.env.VERCEL_ENV === 'preview';
-const isDevelopment = process.env.VERCEL_ENV === 'development' || !process.env.VERCEL_ENV;
-
-// More lenient origin checking for non-production environments
-const validateOrigin = (origin) => {
-  // Always check against allowed origins
-  const isOriginAllowed = allowedOrigins.some(allowed => {
-    if (typeof allowed === 'string') {
-      return allowed === origin;
-    } else if (allowed instanceof RegExp) {
-      return allowed.test(origin);
-    }
-    return false;
-  });
+// Vercel serverless handler using export default (ES module style)
+export default async function handler(req, res) {
+  console.log('---------- API REQUEST START ----------');
+  console.log('Request method:', req.method);
   
-  // In production, strictly enforce origin
-  if (isProduction) {
-    return isOriginAllowed;
-  }
-  
-  // In preview or development, be more lenient
-  if (isPreview) {
-    // Accept any Vercel preview URL (they all have vercel.app domain)
-    return isOriginAllowed || origin.includes('vercel.app');
-  }
-  
-  // In local development, be very permissive
-  return true;
-}
-
-// This is the Vercel serverless handler
-module.exports = async (req, res) => {
-  console.log('📣 API route handler called with Vercel environment:', process.env.VERCEL_ENV);
-  
-  // Handle OPTIONS request for CORS
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    return res.status(200).end();
-  }
-  
-  // 1. Method validation - allow both GET and POST for easier debugging
-  if (req.method !== 'POST' && req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // 2. Set CORS headers - more permissive to fix deployment issues
+  // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // 3. Rate limiting
-  const clientIP = req.headers['x-forwarded-for'] || 
-                   req.connection.remoteAddress || 
-                   'unknown';
-                   
-  if (isRateLimited(clientIP)) {
-    return res.status(429).json({ 
-      error: 'Too many requests. Please try again later.',
-      retryAfter: '60' // Seconds until retry is allowed
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    console.log('Handling OPTIONS request');
+    return res.status(200).end();
+  }
+  
+  // Handle GET requests - useful for testing if the API is reachable
+  if (req.method === 'GET') {
+    console.log('Handling GET request - health check');
+    return res.status(200).json({ 
+      status: 'ok',
+      message: 'API is running',
+      env: process.env.VERCEL_ENV || 'unknown'
     });
   }
-
+  
+  // Only proceed with POST requests
+  if (req.method !== 'POST') {
+    console.log('Invalid method:', req.method);
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  
+  // Start main execution
   try {
-    // Log all environment variables (safely)
-    const envKeys = Object.keys(process.env).filter(key => 
-      key.includes('GEMINI') || key.includes('API') || key === 'VERCEL_ENV'
-    );
-    console.log('Available environment variable keys:', envKeys);
+    console.log('Starting POST request handling');
     
-    // Try multiple possible environment variable names
-    const apiKey = process.env.GEMINI_API_KEY || 
-                   process.env.VITE_GEMINI_API_KEY ||
-                   process.env.API_KEY;
+    // Check for API key
+    console.log('Checking for API key');
+    const apiKey = process.env.GEMINI_API_KEY;
     
     if (!apiKey) {
-      console.error('❌ API key not configured in environment');
+      console.error('API key not found in environment variables');
       return res.status(500).json({ 
-        error: 'API key not configured',
-        checkedVars: envKeys.join(', '),
-        env: process.env.VERCEL_ENV || 'unknown'
+        error: 'Server configuration error',
+        message: 'API key not configured'
       });
     }
-
-    // 5. For development ONLY: If GET request and dev mode, verify API key works
-    if (req.method === 'GET' && isDevelopment) {
-      return res.status(200).json({ 
-        message: 'API key is configured correctly',
-        environment: process.env.NODE_ENV || 'unknown'
+    
+    console.log('API key found, length:', apiKey.length);
+    
+    // Parse request body
+    let prompt, model;
+    try {
+      console.log('Parsing request body');
+      
+      // Check if body exists
+      if (!req.body) {
+        console.error('Request body is empty');
+        return res.status(400).json({ error: 'Missing request body' });
+      }
+      
+      console.log('Request body type:', typeof req.body);
+      
+      // Handle different body formats
+      if (typeof req.body === 'string') {
+        const parsedBody = JSON.parse(req.body);
+        prompt = parsedBody.prompt;
+        model = parsedBody.model;
+      } else {
+        prompt = req.body.prompt;
+        model = req.body.model;
+      }
+      
+      if (!prompt) {
+        console.error('No prompt found in request');
+        return res.status(400).json({ error: 'Missing prompt in request body' });
+      }
+      
+      console.log('Prompt received, length:', prompt.length);
+      console.log('Model requested:', model || 'default');
+    } catch (bodyError) {
+      console.error('Error parsing request body:', bodyError);
+      return res.status(400).json({ 
+        error: 'Invalid request body', 
+        message: bodyError.message 
       });
     }
-
-    // 6. Return API key (for both GET and POST)
-    return res.status(200).json({ 
-      apiKey,
-      message: 'API key successfully retrieved'
-    });
+    
+    // Initialize AI client
+    console.log('Initializing GoogleGenerativeAI client');
+    let genAI;
+    try {
+      genAI = new GoogleGenerativeAI(apiKey);
+      console.log('GoogleGenerativeAI client initialized successfully');
+    } catch (aiInitError) {
+      console.error('Error initializing AI client:', aiInitError);
+      return res.status(500).json({ 
+        error: 'AI initialization failed', 
+        message: aiInitError.message 
+      });
+    }
+    
+    // Get model
+    console.log('Getting generative model');
+    let genModel;
+    try {
+      genModel = genAI.getGenerativeModel({ 
+        model: model || 'gemini-1.0-pro'
+      });
+      console.log('Successfully got generative model');
+    } catch (modelError) {
+      console.error('Error getting generative model:', modelError);
+      return res.status(500).json({ 
+        error: 'Model initialization failed', 
+        message: modelError.message 
+      });
+    }
+    
+    // Generate content
+    console.log('Generating content');
+    try {
+      const result = await genModel.generateContent(prompt);
+      console.log('Content generated successfully');
+      
+      const response = await result.response;
+      const text = response.text();
+      console.log('Response text extracted, length:', text.length);
+      
+      console.log('---------- API REQUEST END (SUCCESS) ----------');
+      return res.status(200).json({ text, model: model || 'gemini-1.0-pro' });
+    } catch (generationError) {
+      console.error('Error generating content:', generationError);
+      return res.status(500).json({ 
+        error: 'Content generation failed', 
+        message: generationError.message,
+        stack: generationError.stack
+      });
+    }
   } catch (error) {
-    console.error('💥 Error in API route:', error);
+    // Catch-all error handler for the entire function
+    console.error('Unexpected error in API route:', error);
+    console.error('Error stack:', error.stack);
+    console.log('---------- API REQUEST END (ERROR) ----------');
+    
     return res.status(500).json({ 
       error: 'Internal server error', 
-      message: error.message
+      message: error.message,
+      stack: error.stack
     });
   }
-}; 
+}

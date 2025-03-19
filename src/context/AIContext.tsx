@@ -1,12 +1,11 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { Conversation, Idea, IterationData } from '../types';
-import { getSecureApiKey } from '../utils/api';
+import { generateWithGemini } from '../utils/api';
 
-// Model names from environment variables
-const PROMPT_ENHANCER_MODEL = import.meta.env.VITE_PROMPT_ENHANCER_MODEL;
-const IDEA_GENERATOR_MODEL = import.meta.env.VITE_IDEA_GENERATOR_MODEL;
-const CRITIC_MODEL = import.meta.env.VITE_CRITIC_MODEL;
+// Model names from environment variables or use defaults
+const PROMPT_ENHANCER_MODEL = import.meta.env.VITE_PROMPT_ENHANCER_MODEL || 'gemini-1.0-pro';
+const IDEA_GENERATOR_MODEL = import.meta.env.VITE_IDEA_GENERATOR_MODEL || 'gemini-1.0-pro';
+const CRITIC_MODEL = import.meta.env.VITE_CRITIC_MODEL || 'gemini-1.0-pro';
 
 interface AIContextType {
   isLoading: boolean;
@@ -17,7 +16,7 @@ interface AIContextType {
 
 const AIContext = createContext<AIContextType | undefined>(undefined);
 
-// Prompt for enhancing user input (unchanged)
+// Prompt for enhancing user input
 const PROMPT_ENHANCER_PROMPT = `You are an idea generation assistant. Your task is to take any input and transform it into a prompt for generating creative ideas.
 
 Examples:
@@ -100,7 +99,7 @@ Rules:
 - Prioritize clarity and readability
 - Be specific but concise with suggestions
 - If 2+ ideas share a similar theme (e.g., all tech-focused), rate the less distinct ones below 85 and demand diverse replacements
-- One idea must score at least 92, but don’t force all to change if refining one
+- One idea must score at least 92, but don't force all to change if refining one
 - If all ideas are food-related for a food prompt, ask for one non-food idea
 
 CRITICAL: Your response MUST be a valid JSON object with EXACTLY the three required properties.
@@ -178,10 +177,9 @@ const creativeDirections = [
 "Emphasize streamlined or frictionless experiences",
 "Focus on seamless integration with daily routines",
 "Think about love"
-
 ];
 
-// Helper functions (unchanged)
+// Helper functions
 const extractAndParseJSON = (text: string) => {
   const patterns = [/\[.*\]|\{.*\}/s, /```json\s*([\s\S]*?)\s*```/, /```\s*([\s\S]*?)\s*```/];
   for (const pattern of patterns) {
@@ -216,39 +214,24 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [isLoading, setIsLoading] = useState(false);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [genAI, setGenAI] = useState<GoogleGenerativeAI | null>(null);
-
-  useEffect(() => {
-    const initializeAPI = async () => {
-      try {
-        const apiKey = await getSecureApiKey();
-        if (!apiKey) throw new Error('Empty API key');
-        setGenAI(new GoogleGenerativeAI(apiKey));
-      } catch (error) {
-        setError(`Failed to initialize API: ${(error as Error).message}`);
-      }
-    };
-    initializeAPI();
-  }, []);
 
   const generateIdeas = useCallback(async (prompt: string) => {
     if (!prompt.trim()) {
       setError('Please enter a prompt');
       return;
     }
-    if (!genAI) {
-      setError('API not initialized. Please try again later.');
-      return;
-    }
+    
     setIsLoading(true);
     setError(null);
 
     try {
       // Enhance prompt
-      const enhancerModel = genAI.getGenerativeModel({ model: PROMPT_ENHANCER_MODEL });
-      const enhancerChat = enhancerModel.startChat({ history: [{ role: "user", parts: [PROMPT_ENHANCER_PROMPT] }] });
-      const enhancerResult = await enhancerChat.sendMessage(prompt);
-      const enhancedPrompt = await enhancerResult.response.text();
+      const enhancedPrompt = await generateWithGemini({
+        prompt: PROMPT_ENHANCER_PROMPT + "\n\n" + prompt,
+        model: PROMPT_ENHANCER_MODEL,
+        temperature: 0.7
+      });
+      
       if (!enhancedPrompt) throw new Error("Failed to enhance the prompt");
 
       let currentPrompt = enhancedPrompt;
@@ -265,31 +248,30 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         .sort(() => 0.5 - Math.random())
         .slice(0, 5);
 
-      // Configure generator model
-      const generatorModel = genAI.getGenerativeModel({
-        model: IDEA_GENERATOR_MODEL,
-        generationConfig: {
-          temperature: 0.85,
-          topP: 0.9,
-          maxOutputTokens: 3000,
-        },
-      });
-
       // Initial generation with unique directions per idea
       const generatorMessage = `${enhancedPrompt}\n\nGenerate 5 ideas, each tied to one of these creative directions: ${selectedDirections.join('; ')}. Ensure each idea reflects its assigned direction and is thematically distinct from the others to avoid overlap.`;
-      const initialGeneratorChat = generatorModel.startChat({ history: [{ role: "user", parts: [IDEA_GENERATOR_PROMPT] }] });
-      const initialIdeasResult = await initialGeneratorChat.sendMessage(generatorMessage);
-      const firstIterationResponse = await initialIdeasResult.response.text();
+      
+      const firstIterationResponse = await generateWithGemini({
+        prompt: IDEA_GENERATOR_PROMPT + "\n\n" + generatorMessage,
+        model: IDEA_GENERATOR_MODEL,
+        temperature: 0.85
+      });
+      
       let initialIdeas = extractAndParseJSON(firstIterationResponse);
       if (!Array.isArray(initialIdeas)) throw new Error("Invalid response format from idea generator");
 
       // Get initial feedback
-      const criticModel = genAI.getGenerativeModel({ model: CRITIC_MODEL });
-      const initialCriticChat = criticModel.startChat({ history: [{ role: "user", parts: [CRITIC_PROMPT] }] });
-      const initialCriticResult = await initialCriticChat.sendMessage(
-        JSON.stringify({ originalPrompt: prompt, currentPrompt, ideas: initialIdeas, iteration: 1 })
-      );
-      const firstIterationFeedback = await initialCriticResult.response.text();
+      const firstIterationFeedback = await generateWithGemini({
+        prompt: CRITIC_PROMPT + "\n\n" + JSON.stringify({ 
+          originalPrompt: prompt, 
+          currentPrompt, 
+          ideas: initialIdeas, 
+          iteration: 1 
+        }),
+        model: CRITIC_MODEL,
+        temperature: 0.4
+      });
+      
       let initialCriticism = extractAndParseJSON(firstIterationFeedback);
       if (!validateCriticResponse(initialCriticism)) throw new Error("Invalid initial criticism format");
 
@@ -299,16 +281,18 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         score: initialCriticism.overallScore,
         ratings: initialCriticism.ratings,
       });
+      
       lastIterationScore = initialCriticism.ratings.reduce((a: number, b: number) => a + b, 0) / initialCriticism.ratings.length;
       bestScore = initialCriticism.overallScore;
       finalIdeas = initialIdeas.map((idea: any, index: number) => ({
         ...idea,
         rating: initialCriticism.ratings[index] || 0,
+        id: `idea-${Date.now()}-${index}` // Add unique ID for each idea
       }));
       finalFeedback = initialCriticism.feedback;
       iteration = 1;
 
-      // Iteration loop
+      // Iteration loop - limited to just one iteration for this modified version
       while (iteration < MAX_ITERATIONS && (iteration < MIN_ITERATIONS || improvementThresholdMet)) {
         const feedbackMessage = `Based on the following feedback, refine or replace the existing ideas:
 
@@ -319,24 +303,34 @@ ${JSON.stringify(finalIdeas, null, 2)}
 
 Your task:
 1. For ideas with ratings 90 or higher, keep them or make minor improvements based on feedback.
-2. For ideas below 90, refine them to reach 90+ by addressing feedback, or replace them with new, distinct ideas if refinement isn’t feasible.
+2. For ideas below 90, refine them to reach 90+ by addressing feedback, or replace them with new, distinct ideas if refinement isn't feasible.
 3. Use these creative directions for the 5 ideas: ${selectedDirections.join('; ')}.
 4. Ensure all ideas remain unique, avoiding thematic overlap (e.g., not all tech-focused).
 5. Keep descriptions concise (under 150 words) and clear.
 
 Enhanced prompt: ${currentPrompt}`;
 
-        const generatorChat = generatorModel.startChat({ history: [{ role: "user", parts: [IDEA_GENERATOR_PROMPT] }] });
-        const ideasResult = await generatorChat.sendMessage(feedbackMessage);
-        const rawIdeasResponse = await ideasResult.response.text();
+        const rawIdeasResponse = await generateWithGemini({
+          prompt: IDEA_GENERATOR_PROMPT + "\n\n" + feedbackMessage,
+          model: IDEA_GENERATOR_MODEL,
+          temperature: 0.85
+        });
+        
         let ideas = extractAndParseJSON(rawIdeasResponse);
         if (!Array.isArray(ideas)) throw new Error("Invalid ideas format: expected array");
 
-        const criticChat = criticModel.startChat({ history: [{ role: "user", parts: [CRITIC_PROMPT] }] });
-        const criticResult = await criticChat.sendMessage(
-          JSON.stringify({ originalPrompt: prompt, currentPrompt, ideas, iteration: iteration + 1, previousIdeas: finalIdeas })
-        );
-        const rawFeedbackResponse = await criticResult.response.text();
+        const rawFeedbackResponse = await generateWithGemini({
+          prompt: CRITIC_PROMPT + "\n\n" + JSON.stringify({ 
+            originalPrompt: prompt, 
+            currentPrompt, 
+            ideas, 
+            iteration: iteration + 1, 
+            previousIdeas: finalIdeas 
+          }),
+          model: CRITIC_MODEL,
+          temperature: 0.4
+        });
+        
         let criticism = extractAndParseJSON(rawFeedbackResponse);
         if (!validateCriticResponse(criticism)) throw new Error("Invalid criticism format");
 
@@ -355,6 +349,7 @@ Enhanced prompt: ${currentPrompt}`;
         finalIdeas = ideas.map((idea, index) => ({
           ...idea,
           rating: criticism.ratings[index] || 0,
+          id: `idea-${Date.now()}-${index}-iter-${iteration}`
         }));
         bestScore = criticism.overallScore;
         finalFeedback = criticism.feedback;
@@ -382,7 +377,7 @@ Enhanced prompt: ${currentPrompt}`;
     } finally {
       setIsLoading(false);
     }
-  }, [genAI]);
+  }, []);
 
   return (
     <AIContext.Provider value={{ isLoading, conversation, error, generateIdeas }}>

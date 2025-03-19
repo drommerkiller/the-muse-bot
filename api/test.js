@@ -1,28 +1,39 @@
-// Simple test endpoint to verify API routes are working
-module.exports = (req, res) => {
-  // Enable CORS
+/**
+ * Simple test endpoint for diagnostics
+ * Using ES module syntax
+ */
+export default async function handler(req, res) {
+  // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+
   // Handle OPTIONS request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
   
-  // Simple diagnostic response
-  res.status(200).json({
-    message: 'API route is working',
+  // Get environment info
+  const nodeVersion = process.version;
+  const environment = process.env.VERCEL_ENV || 'unknown';
+  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+  
+  // Gather available environment variables (safely)
+  const envVars = Object.keys(process.env)
+    .filter(key => !key.includes('KEY') && !key.includes('SECRET') && !key.includes('TOKEN'))
+    .reduce((obj, key) => {
+      obj[key] = process.env[key];
+      return obj;
+    }, {});
+  
+  // Return diagnostic information
+  return res.status(200).json({
+    status: 'ok',
+    message: 'Test endpoint is working',
     timestamp: new Date().toISOString(),
-    environment: process.env.VERCEL_ENV || 'unknown',
-    // List environment variables that exist (without values for security)
-    envVars: Object.keys(process.env)
-      .filter(key => key.includes('GEMINI') || key.includes('API'))
-      .map(key => ({
-        name: key,
-        exists: Boolean(process.env[key]),
-        // Don't expose actual values, just a safely masked preview
-        preview: process.env[key] ? `${process.env[key].substring(0, 3)}...` : null
-      }))
+    nodeVersion,
+    environment,
+    hasGeminiKey,
+    envVars
   });
-}; 
+}
