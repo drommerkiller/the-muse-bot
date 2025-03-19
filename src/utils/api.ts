@@ -26,31 +26,42 @@ export async function getSecureApiKey(): Promise<string> {
   // For production, use the secure API endpoint
   console.log('🔄 Using secure API endpoint (PRODUCTION)');
   try {
-    // The full URL path is important for Vercel - explicitly include /api/
-    const response = await fetch('/api/gemini', {
-      method: 'POST',
+    // Make the fetch with better error handling
+    console.log('🔄 Fetching from /api/gemini');
+    
+    // Try with absolute URL first
+    const baseUrl = window.location.origin;
+    const apiEndpoint = `${baseUrl}/api/gemini`;
+    console.log('📍 API Endpoint:', apiEndpoint);
+    
+    const response = await fetch(apiEndpoint, {
+      method: 'GET', // Using GET for simplicity
       headers: {
         'Content-Type': 'application/json',
-      }
+      },
+      cache: 'no-store'
     });
 
     console.log('📥 Response received:', { 
       status: response.status, 
-      ok: response.ok
+      ok: response.ok,
+      statusText: response.statusText
     });
 
     if (!response.ok) {
-      console.error('❌ API key fetch failed:', response.status);
+      const errorText = await response.text().catch(() => '');
+      console.error('❌ API key fetch failed:', response.status, response.statusText, errorText);
       throw new Error(`Failed to get API key: ${response.status}`);
     }
 
     const data = await response.json();
     
     if (!data.apiKey) {
-      console.error('❌ No API key in response');
+      console.error('❌ No API key in response', data);
       throw new Error('API key not found in response');
     }
     
+    console.log('✅ API key successfully retrieved');
     return data.apiKey;
   } catch (error) {
     console.error('🚨 Error getting secure API key:', error);

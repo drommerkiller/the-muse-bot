@@ -81,6 +81,28 @@ This automated system ensures high-quality, relevant ideas through continuous im
 - **Package Manager**: npm
 - **Code Quality**: ESLint
 - **Markdown Rendering**: react-markdown
+- **Deployment**: Vercel serverless functions
+
+## 🌐 API Routes
+
+The application uses serverless API routes hosted on Vercel:
+
+### `/api/gemini.js`
+
+The main API endpoint that integrates with Google's Generative AI (Gemini) to process idea generation requests:
+
+- Handles idea generation, enhancement, and evaluation
+- Implements rate limiting (10 requests per minute)
+- Validates request origins
+- Supports multiple environments (production, preview, development)
+
+### `/api/test.js`
+
+A diagnostic endpoint to verify API functionality:
+
+- Returns basic environment information
+- Confirms API route is working
+- Shows available environment variables (safely masked)
 
 ## 📋 Prerequisites
 
@@ -101,9 +123,13 @@ cd ai-idea-generator
 npm install
 ```
 
-3. Create a `.env.local` file in the root directory and add your Google AI API key:
+3. Create a `.env.local` file in the root directory and add your API keys:
 ```env
-VITE_GOOGLE_AI_KEY=your_api_key_here
+GEMINI_API_KEY=your_api_key_here
+VITE_GEMINI_API_KEY=your_api_key_here
+VITE_PROMPT_ENHANCER_MODEL=gemini-2.0-flash-lite
+VITE_IDEA_GENERATOR_MODEL=gemini-2.0-flash
+VITE_CRITIC_MODEL=gemini-2.0-flash-lite
 ```
 
 4. Start the development server:
@@ -124,13 +150,17 @@ The application will be available at `http://localhost:5173`
 
 ```
 ai-idea-generator/
+├── api/              # Serverless API functions
+│   ├── gemini.js     # Main Gemini AI integration endpoint
+│   └── test.js       # Diagnostic endpoint
 ├── src/
-│   ├── components/     # React components
-│   ├── context/       # React context providers
-│   ├── types.ts       # TypeScript type definitions
-│   ├── App.tsx        # Main application component
-│   └── main.tsx       # Application entry point
-├── public/            # Static assets
+│   ├── components/   # React components
+│   ├── context/      # React context providers
+│   ├── utils/        # Utility functions
+│   ├── types.ts      # TypeScript type definitions
+│   ├── App.tsx       # Main application component
+│   └── main.tsx      # Application entry point
+├── public/           # Static assets
 └── [configuration files]
 ```
 
@@ -138,7 +168,12 @@ ai-idea-generator/
 
 The following environment variables are required:
 
-- `VITE_GOOGLE_AI_KEY` - Google Generative AI API key
+- `GEMINI_API_KEY` - Google Generative AI API key (server-side)
+- `VITE_GEMINI_API_KEY` - Google Generative AI API key (client-side)
+- `VITE_PROMPT_ENHANCER_MODEL` - Model to use for prompt enhancement (e.g., "gemini-2.0-flash-lite")
+- `VITE_IDEA_GENERATOR_MODEL` - Model to use for idea generation (e.g., "gemini-2.0-flash")
+- `VITE_CRITIC_MODEL` - Model to use for idea evaluation (e.g., "gemini-2.0-flash-lite")
+- `VITE_OPENAI_API_KEY` - Optional OpenAI API key (if OpenAI integration is used)
 
 ## 🤝 Contributing
 

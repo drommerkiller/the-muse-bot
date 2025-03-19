@@ -78,14 +78,14 @@ module.exports = async (req, res) => {
     return res.status(200).end();
   }
   
-  // 1. Method validation
-  if (req.method !== 'POST') {
+  // 1. Method validation - allow both GET and POST for easier debugging
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   // 2. Set CORS headers - more permissive to fix deployment issues
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   // 3. Rate limiting
@@ -101,16 +101,24 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Add extra debugging for environment variables
-    console.log('Environment variable names:', Object.keys(process.env)
-      .filter(key => key.includes('GEMINI') || key.includes('API'))
-      .join(', '));
+    // Log all environment variables (safely)
+    const envKeys = Object.keys(process.env).filter(key => 
+      key.includes('GEMINI') || key.includes('API') || key === 'VERCEL_ENV'
+    );
+    console.log('Available environment variable keys:', envKeys);
     
-    const apiKey = process.env.GEMINI_API_KEY;
+    // Try multiple possible environment variable names
+    const apiKey = process.env.GEMINI_API_KEY || 
+                   process.env.VITE_GEMINI_API_KEY ||
+                   process.env.API_KEY;
     
     if (!apiKey) {
       console.error('❌ API key not configured in environment');
-      return res.status(500).json({ error: 'API key not configured' });
+      return res.status(500).json({ 
+        error: 'API key not configured',
+        checkedVars: envKeys.join(', '),
+        env: process.env.VERCEL_ENV || 'unknown'
+      });
     }
 
     // 5. For development ONLY: If GET request and dev mode, verify API key works
@@ -121,10 +129,16 @@ module.exports = async (req, res) => {
       });
     }
 
-    // 6. Return API key
-    return res.status(200).json({ apiKey });
+    // 6. Return API key (for both GET and POST)
+    return res.status(200).json({ 
+      apiKey,
+      message: 'API key successfully retrieved'
+    });
   } catch (error) {
     console.error('💥 Error in API route:', error);
-    return res.status(500).json({ error: 'Internal server error', message: error.message });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      message: error.message
+    });
   }
 }; 
