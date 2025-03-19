@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Conversation, Idea, IterationData } from '../types';
 import { getSecureApiKey } from '../utils/api';
 
+// Model names from environment variables
 const PROMPT_ENHANCER_MODEL = import.meta.env.VITE_PROMPT_ENHANCER_MODEL;
 const IDEA_GENERATOR_MODEL = import.meta.env.VITE_IDEA_GENERATOR_MODEL;
 const CRITIC_MODEL = import.meta.env.VITE_CRITIC_MODEL;
@@ -16,107 +17,163 @@ interface AIContextType {
 
 const AIContext = createContext<AIContextType | undefined>(undefined);
 
-const PROMPT_ENHANCER_PROMPT = `
-You are an idea generation assistant. Your task is to take any input and transform it into a prompt for generating creative ideas.
+// Prompt for enhancing user input (unchanged)
+const PROMPT_ENHANCER_PROMPT = `You are an idea generation assistant. Your task is to take any input and transform it into a prompt for generating creative ideas.
+
+Examples:
+Input: "coffee"
+Output: "Generate innovative ideas involving coffee"
+Input: "cats sleeping"
+Output: "Create unique ideas centered around cats and sleep"
+Input: "red"
+Output: "Develop creative concepts using the color red"
 
 Rules:
-- Always frame the prompt as generating ideas
-- Never ask for more information
-- Keep it simple and focused
+- ALWAYS frame the prompt as a request for generating ideas
+- NEVER ask for information or explanations
+- Keep it simple and focused on ideation
 - Maintain the original subject matter
 - Don't add constraints or requirements
-- Don't modify user's intent
-- Return ONLY the enhanced prompt
-`;
+- NEVER modify or sanitize the user's intent
 
-const IDEA_GENERATOR_PROMPT = `
-You are a creative idea generator. Your task is to generate innovative ideas EXACTLY matching the user's enhanced request.
+Return ONLY the enhanced prompt, nothing else.`;
+
+// Enhanced idea generator prompt with per-idea creative directions
+const IDEA_GENERATOR_PROMPT = `You are a creative idea generator. Your task is to generate innovative ideas that EXACTLY match what the user wants.
 
 Rules:
 - Generate exactly what the user asks for
-- Create 3-5 unique, detailed ideas
-- Ensure each idea explores a different angle or application
-- Mix practicality with innovation
+- Create 3-5 unique, detailed concepts
+- Each idea MUST align with a specific creative direction provided in the request
+- Ensure all ideas are thematically distinct from each other, avoiding overlap in concepts or approaches
+- Focus on innovation and creativity
+- Treat all topics professionally
 - Don't add warnings or disclaimers
-- Don't reference previous ideas explicitly
-- If input is a single food item, create ideas beyond just recipes
-- Return ONLY a JSON array with this structure:
+- Include a balance of both innovative and immediately implementable ideas
+- Ensure at least half of the ideas are practical and feasible with current technology
+- NEVER modify or sanitize the user's intent
+- Do not refer to previous ideas unless explicitly instructed
+- If user prompt is a single-word food item, never write just recipes, invent ideas around the food item
+
+Your response MUST be a valid JSON array with this structure:
 [
-{
-"title": "...",
-"description": "..."
-}
+  {
+    "title": "Direct, relevant title",
+    "description": "Professional, detailed explanation (2-3 paragraphs) reflecting its assigned creative direction"
+  }
 ]
-`;
 
-const CRITIC_PROMPT = `
-You are an objective idea evaluator.
+Return ONLY the JSON array, no other text.`;
 
-Return a JSON object:
+// Enhanced critic prompt with stronger diversity enforcement
+const CRITIC_PROMPT = `You are an objective idea evaluator. Your task is to rate ideas based on how well they fulfill the user's request.
+
+You MUST return a JSON object with EXACTLY these three properties:
+1. "ratings": An array of numbers (0-100) rating each idea
+2. "feedback": A string with specific improvement suggestions
+3. "overallScore": One of these exact values: "A++", "A+", "A", "B", or "C"
+
+Example of VALID response format:
 {
-  "ratings": [0-100],
-  "feedback": "...",
-  "overallScore": "A++"|"A+"|"A"|"B"|"C"
+  "ratings": [85, 92, 78],
+  "feedback": "The first idea needs more detail. The second is strong. The third overlaps with the first; diversify its theme.",
+  "overallScore": "A"
 }
 
-Rate each idea by:
-- Alignment (40%)
-- Innovation (30%)
-- Clarity (30%)
+Evaluation criteria:
+1. Alignment with user's intent (40%): Does it directly address the prompt and stay on theme?
+2. Innovation within context (30%): Is it original and creative within the prompt's scope?
+3. Clarity and accessibility (20%): Is it concise, clear, and understandable to a general audience?
+4. Diversity within set (10%): Does it differ thematically from other ideas?
 
 Rules:
-- Don't suggest changing user's intent
-- Don't add moral judgments
-- Don't modify user's theme
-- Rate purely on execution quality
-- Encourage distinct angles between ideas
-`;
+- Focus ONLY on how well ideas match what the user asked for
+- NEVER suggest changing the user's intent
+- NEVER add moral judgments
+- NEVER try to sanitize or modify the theme
+- Take the role of an expert in the prompt's subject
+- Rate ideas purely on execution quality
+- If an idea is strong (85+), suggest minor refinements
+- DO NOT request unnecessary technical details or jargon
+- Prioritize clarity and readability
+- Be specific but concise with suggestions
+- If 2+ ideas share a similar theme (e.g., all tech-focused), rate the less distinct ones below 85 and demand diverse replacements
+- One idea must score at least 92, but don’t force all to change if refining one
+- If all ideas are food-related for a food prompt, ask for one non-food idea
 
+CRITICAL: Your response MUST be a valid JSON object with EXACTLY the three required properties.
+DO NOT add any other text, explanations, or properties.`;
+
+// Constants for iteration control
 const MAX_ITERATIONS = 5;
 const MIN_ITERATIONS = 2;
-const IMPROVEMENT_THRESHOLD = 0.02;
+const IMPROVEMENT_THRESHOLD = 0.02; // 2% improvement
 
+// Creative directions for guiding generation
 const creativeDirections = [
-  "Practical",
-  "Unusual",
-  "Playful",
-  "Elegant",
-  "Minimalist",
-  "Futuristic",
-  "Nature-inspired",
-  "Surprising",
-  "Traditional meets Modern",
-  "Sustainable",
-  "Cultural",
-  "Collaborative",
-  "Luxurious",
-  "Educational",
-  "Tech-driven",
-  "Sensory",
-  "Scalable",
-  "Niche",
-  "Whimsical",
-  "Problem-solving",
-  "Artistic",
-  "Cross-industry",
-  "Global",
-  "Inclusive",
-  "Efficient",
-  "Psychological",
-  "Interactive",
-  "Health-focused",
-  "Data-driven",
-  "Modular"
+  "Focus on practical and straightforward ideas",
+  "Explore unusual or unexpected perspectives",
+  "Consider playful and light-hearted approaches",
+  "Think about elegant and refined concepts",
+  "Look for simple, minimalist solutions",
+  "Emphasize futuristic or sci-fi-inspired themes",
+  "Draw inspiration from nature or organic forms",
+  "Incorporate elements of surprise or paradox",
+  "Blend traditional and modern concepts",
+  "Prioritize sustainability or eco-friendly angles",
+  "Highlight cultural or historical references",
+  "Focus on community or collaborative aspects",
+  "Explore luxury or high-end market potential",
+  "Consider educational or informative angles",
+  "Incorporate technology or digital innovation",
+  "Emphasize sensory experiences (visual, tactile, etc.)",
+  "Think about scalable or mass-market applications",
+  "Explore niche or specialized use cases",
+  "Consider humorous or whimsical interpretations",
+  "Focus on problem-solving or utility",
+  "Incorporate artistic or creative expressions",
+  "Explore cross-industry applications",
+  "Think about global or international perspectives",
+  "Consider accessibility and inclusivity",
+  "Focus on speed or efficiency",
+  "Explore emotional or psychological impacts",
+  "Think about gamification or interactive elements",
+  "Consider health and wellness angles",
+  "Explore data-driven or analytical approaches",
+  "Think about modular or customizable solutions"
 ];
 
-const randomDirections = (num = 3) => 
-  creativeDirections.sort(() => 0.5 - Math.random()).slice(0, num);
+// Helper functions (unchanged)
+const extractAndParseJSON = (text: string) => {
+  const patterns = [/\[.*\]|\{.*\}/s, /```json\s*([\s\S]*?)\s*```/, /```\s*([\s\S]*?)\s*```/];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      try {
+        const jsonStr = match[1] || match[0];
+        return JSON.parse(jsonStr.replace(/```json|```/g, '').trim());
+      } catch {
+        continue;
+      }
+    }
+  }
+  throw new Error('No valid JSON found');
+};
 
-const extractAndParseJSON = (text: string) => JSON.parse(text.match(/\[.*\]|{.*}/s)?.[0] || '[]');
+const validateCriticResponse = (response: any) => {
+  return (
+    response &&
+    'ratings' in response &&
+    Array.isArray(response.ratings) &&
+    response.ratings.every((r: any) => typeof r === 'number' && r >= 0 && r <= 100) &&
+    'feedback' in response &&
+    typeof response.feedback === 'string' &&
+    'overallScore' in response &&
+    ['A++', 'A+', 'A', 'B', 'C'].includes(response.overallScore)
+  );
+};
 
-const validateCriticResponse = (response: any) =>
-  response && 'ratings' in response && 'feedback' in response && 'overallScore' in response;
-
+// AIProvider component
 export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -124,67 +181,166 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [genAI, setGenAI] = useState<GoogleGenerativeAI | null>(null);
 
   useEffect(() => {
-    getSecureApiKey().then(apiKey => {
-      if (apiKey) setGenAI(new GoogleGenerativeAI(apiKey));
-      else setError('Failed to load API key.');
-    })
-    .catch(e => setError(`Initialization error: ${e.message}`));
+    const initializeAPI = async () => {
+      try {
+        const apiKey = await getSecureApiKey();
+        if (!apiKey) throw new Error('Empty API key');
+        setGenAI(new GoogleGenerativeAI(apiKey));
+      } catch (error) {
+        setError(`Failed to initialize API: ${(error as Error).message}`);
+      }
+    };
+    initializeAPI();
   }, []);
 
   const generateIdeas = useCallback(async (prompt: string) => {
-    if (!prompt.trim()) return setError('Please enter a prompt');
-    if (!genAI) return setError('API not initialized yet');
-
+    if (!prompt.trim()) {
+      setError('Please enter a prompt');
+      return;
+    }
+    if (!genAI) {
+      setError('API not initialized. Please try again later.');
+      return;
+    }
     setIsLoading(true);
     setError(null);
 
     try {
+      // Enhance prompt
       const enhancerModel = genAI.getGenerativeModel({ model: PROMPT_ENHANCER_MODEL });
-      const enhancedResp = await enhancerModel.generateContent(`${PROMPT_ENHANCER_PROMPT}\n\n${prompt}`);
-      const enhancedPrompt = enhancedResp.response.text();
+      const enhancerChat = enhancerModel.startChat({ history: [{ role: "user", parts: [PROMPT_ENHANCER_PROMPT] }] });
+      const enhancerResult = await enhancerChat.sendMessage(prompt);
+      const enhancedPrompt = await enhancerResult.response.text();
+      if (!enhancedPrompt) throw new Error("Failed to enhance the prompt");
 
-      if (!enhancedPrompt) throw new Error("Prompt enhancement failed");
+      let currentPrompt = enhancedPrompt;
+      let iteration = 0;
+      let bestScore = 'C';
+      let finalIdeas: Idea[] = [];
+      let finalFeedback = '';
+      let lastIterationScore = 0;
+      let improvementThresholdMet = true;
+      let iterationHistory: IterationData[] = [];
 
-      const chosenDirections = randomDirections(3);
-      const directionText = `For variety, use these creative angles: ${chosenDirections.join(', ')}.`;
+      // Select 5 unique creative directions for this run
+      const selectedDirections = [...creativeDirections]
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 5);
 
-      const fullGeneratorPrompt = `${enhancedPrompt}\n\n${directionText}`;
-
+      // Configure generator model
       const generatorModel = genAI.getGenerativeModel({
         model: IDEA_GENERATOR_MODEL,
-        generationConfig: { temperature: 0.9, topP: 0.95, maxOutputTokens: 2500 },
+        generationConfig: {
+          temperature: 0.85,
+          topP: 0.9,
+          maxOutputTokens: 3000,
+        },
       });
 
-      const generatorResp = await generatorModel.generateContent(`${IDEA_GENERATOR_PROMPT}\n\n${fullGeneratorPrompt}`);
-      let ideas = extractAndParseJSON(generatorResp.response.text());
+      // Initial generation with unique directions per idea
+      const generatorMessage = `${enhancedPrompt}\n\nGenerate 5 ideas, each tied to one of these creative directions: ${selectedDirections.join('; ')}. Ensure each idea reflects its assigned direction and is thematically distinct from the others to avoid overlap.`;
+      const initialGeneratorChat = generatorModel.startChat({ history: [{ role: "user", parts: [IDEA_GENERATOR_PROMPT] }] });
+      const initialIdeasResult = await initialGeneratorChat.sendMessage(generatorMessage);
+      const firstIterationResponse = await initialIdeasResult.response.text();
+      let initialIdeas = extractAndParseJSON(firstIterationResponse);
+      if (!Array.isArray(initialIdeas)) throw new Error("Invalid response format from idea generator");
 
+      // Get initial feedback
       const criticModel = genAI.getGenerativeModel({ model: CRITIC_MODEL });
-      const criticResp = await criticModel.generateContent(`${CRITIC_PROMPT}\n\n${JSON.stringify({ ideas, originalPrompt: prompt })}`);
-      let feedback = extractAndParseJSON(criticResp.response.text());
+      const initialCriticChat = criticModel.startChat({ history: [{ role: "user", parts: [CRITIC_PROMPT] }] });
+      const initialCriticResult = await initialCriticChat.sendMessage(
+        JSON.stringify({ originalPrompt: prompt, currentPrompt, ideas: initialIdeas, iteration: 1 })
+      );
+      const firstIterationFeedback = await initialCriticResult.response.text();
+      let initialCriticism = extractAndParseJSON(firstIterationFeedback);
+      if (!validateCriticResponse(initialCriticism)) throw new Error("Invalid initial criticism format");
 
-      if (!validateCriticResponse(feedback)) throw new Error("Critic response invalid");
-
-      const ideaRatings = ideas.map((idea: Idea, idx: number) => ({
-        ...idea, rating: feedback.ratings[idx] || 0
+      iterationHistory.push({
+        ideas: initialIdeas,
+        feedback: initialCriticism.feedback,
+        score: initialCriticism.overallScore,
+        ratings: initialCriticism.ratings,
+      });
+      lastIterationScore = initialCriticism.ratings.reduce((a: number, b: number) => a + b, 0) / initialCriticism.ratings.length;
+      bestScore = initialCriticism.overallScore;
+      finalIdeas = initialIdeas.map((idea: any, index: number) => ({
+        ...idea,
+        rating: initialCriticism.ratings[index] || 0,
       }));
+      finalFeedback = initialCriticism.feedback;
+      iteration = 1;
+
+      // Iteration loop
+      while (iteration < MAX_ITERATIONS && (iteration < MIN_ITERATIONS || improvementThresholdMet)) {
+        const feedbackMessage = `Based on the following feedback, refine or replace the existing ideas:
+
+Feedback: ${finalFeedback}
+
+Previous ideas with ratings:
+${JSON.stringify(finalIdeas, null, 2)}
+
+Your task:
+1. For ideas with ratings 90 or higher, keep them or make minor improvements based on feedback.
+2. For ideas below 90, refine them to reach 90+ by addressing feedback, or replace them with new, distinct ideas if refinement isn’t feasible.
+3. Use these creative directions for the 5 ideas: ${selectedDirections.join('; ')}.
+4. Ensure all ideas remain unique, avoiding thematic overlap (e.g., not all tech-focused).
+5. Keep descriptions concise (under 150 words) and clear.
+
+Enhanced prompt: ${currentPrompt}`;
+
+        const generatorChat = generatorModel.startChat({ history: [{ role: "user", parts: [IDEA_GENERATOR_PROMPT] }] });
+        const ideasResult = await generatorChat.sendMessage(feedbackMessage);
+        const rawIdeasResponse = await ideasResult.response.text();
+        let ideas = extractAndParseJSON(rawIdeasResponse);
+        if (!Array.isArray(ideas)) throw new Error("Invalid ideas format: expected array");
+
+        const criticChat = criticModel.startChat({ history: [{ role: "user", parts: [CRITIC_PROMPT] }] });
+        const criticResult = await criticChat.sendMessage(
+          JSON.stringify({ originalPrompt: prompt, currentPrompt, ideas, iteration: iteration + 1, previousIdeas: finalIdeas })
+        );
+        const rawFeedbackResponse = await criticResult.response.text();
+        let criticism = extractAndParseJSON(rawFeedbackResponse);
+        if (!validateCriticResponse(criticism)) throw new Error("Invalid criticism format");
+
+        iterationHistory.push({
+          ideas,
+          feedback: criticism.feedback,
+          score: criticism.overallScore,
+          ratings: criticism.ratings,
+        });
+
+        const currentAverage = criticism.ratings.reduce((a: number, b: number) => a + b, 0) / criticism.ratings.length;
+        const improvement = lastIterationScore ? (currentAverage - lastIterationScore) / lastIterationScore : 0;
+        improvementThresholdMet = improvement >= IMPROVEMENT_THRESHOLD;
+        lastIterationScore = currentAverage;
+
+        finalIdeas = ideas.map((idea, index) => ({
+          ...idea,
+          rating: criticism.ratings[index] || 0,
+        }));
+        bestScore = criticism.overallScore;
+        finalFeedback = criticism.feedback;
+        iteration++;
+
+        currentPrompt = `${enhancedPrompt}\n\nPrevious iteration feedback: ${criticism.feedback}`;
+      }
 
       setConversation({
-        id: `${Date.now()}`,
+        id: Date.now().toString(),
         timestamp: Date.now(),
         prompt,
-        enhancedPrompt: fullGeneratorPrompt,
-        ideas: ideaRatings,
-        feedback: feedback.feedback,
-        iteration: 1,
-        firstIterationResponse: JSON.stringify(ideas),
-        firstIterationFeedback: feedback.feedback,
-        bestScore: feedback.overallScore,
-        improvementThresholdMet: false,
-        iterationHistory: [{ ideas, ratings: feedback.ratings, feedback: feedback.feedback, score: feedback.overallScore }]
+        enhancedPrompt: currentPrompt,
+        ideas: finalIdeas,
+        feedback: finalFeedback,
+        iteration,
+        firstIterationResponse,
+        firstIterationFeedback,
+        bestScore,
+        improvementThresholdMet,
+        iterationHistory,
       });
-
-    } catch (e: any) {
-      setError(e.message || 'Unexpected error');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
@@ -199,6 +355,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
 export const useAI = () => {
   const context = useContext(AIContext);
-  if (!context) throw new Error('useAI must be used within AIProvider');
+  if (context === undefined) throw new Error('useAI must be used within an AIProvider');
   return context;
 };
