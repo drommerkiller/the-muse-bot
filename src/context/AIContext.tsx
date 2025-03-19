@@ -43,6 +43,7 @@ const IDEA_GENERATOR_PROMPT = `You are a creative idea generator. Your task is t
 
 Rules:
 - Generate exactly what the user asks for
+- Do not include the incoprorated creativeDirection element in the response
 - Create 3-5 unique, detailed concepts
 - Each idea MUST align with a specific creative direction provided in the request
 - Ensure all ideas are thematically distinct from each other, avoiding overlap in concepts or approaches
@@ -52,7 +53,8 @@ Rules:
 - Include a balance of both innovative and immediately implementable ideas
 - Ensure at least half of the ideas are practical and feasible with current technology
 - NEVER modify or sanitize the user's intent
-- Do not refer to previous ideas unless explicitly instructed
+- Do not refer to previous ideas unless explicitly instructed. Examples: do not use wording "Glorify uselessness by " or "Explore deliberately impractical ideas" or "Incorporate chaos and randomness by " etc those are just examples.
+- Do not refer to exact wording from creative direction, just use the general idea
 - If user prompt is a single-word food item, never write just recipes, invent ideas around the food item
 
 Your response MUST be a valid JSON array with this structure:
@@ -105,42 +107,78 @@ CRITICAL: Your response MUST be a valid JSON object with EXACTLY the three requi
 DO NOT add any other text, explanations, or properties.`;
 
 // Constants for iteration control
-const MAX_ITERATIONS = 5;
-const MIN_ITERATIONS = 2;
-const IMPROVEMENT_THRESHOLD = 0.02; // 2% improvement
+const MAX_ITERATIONS = 2;
+const MIN_ITERATIONS = 1;
+const IMPROVEMENT_THRESHOLD = 0.2; // 2% improvement
 
 // Creative directions for guiding generation
 const creativeDirections = [
-  "Focus on practical and straightforward ideas",
-  "Explore unusual or unexpected perspectives",
-  "Consider playful and light-hearted approaches",
-  "Think about elegant and refined concepts",
-  "Look for simple, minimalist solutions",
-  "Emphasize futuristic or sci-fi-inspired themes",
-  "Draw inspiration from nature or organic forms",
-  "Incorporate elements of surprise or paradox",
-  "Blend traditional and modern concepts",
-  "Prioritize sustainability or eco-friendly angles",
-  "Highlight cultural or historical references",
-  "Focus on community or collaborative aspects",
-  "Explore luxury or high-end market potential",
-  "Consider educational or informative angles",
-  "Incorporate technology or digital innovation",
-  "Emphasize sensory experiences (visual, tactile, etc.)",
-  "Think about scalable or mass-market applications",
-  "Explore niche or specialized use cases",
-  "Consider humorous or whimsical interpretations",
-  "Focus on problem-solving or utility",
-  "Incorporate artistic or creative expressions",
-  "Explore cross-industry applications",
-  "Think about global or international perspectives",
-  "Consider accessibility and inclusivity",
-  "Focus on speed or efficiency",
-  "Explore emotional or psychological impacts",
-  "Think about gamification or interactive elements",
-  "Consider health and wellness angles",
-  "Explore data-driven or analytical approaches",
-  "Think about modular or customizable solutions"
+ "Focus on practical and straightforward ideas",
+"Explore unusual or unexpected perspectives",
+"Consider playful and light-hearted approaches",
+"Think about elegant and refined concepts",
+"Look for simple, minimalist solutions",
+"Emphasize futuristic or sci-fi-inspired themes",
+"Draw inspiration from nature or organic forms",
+"Incorporate elements of surprise or paradox",
+"Blend traditional and modern concepts",
+"Prioritize sustainability or eco-friendly angles",
+"Prioritize Anti-concept or Unapologetically Useless ",
+"Highlight cultural or historical references",
+"Focus on community or collaborative aspects",
+"Explore luxury or high-end market potential",
+"Consider educational or informative angles",
+"Incorporate technology or digital innovation",
+"Emphasize sensory experiences (visual, tactile, etc.)",
+"Think about scalable or mass-market applications",
+"Explore niche or specialized use cases",
+"Consider humorous or whimsical interpretations",
+"Focus on problem-solving or utility",
+"Focus on Retro-cringe or Absurdist",
+"Incorporate artistic or creative expressions",
+"Explore cross-industry applications",
+"Think about global or international perspectives",
+"Consider accessibility and inclusivity",
+"Focus on speed or efficiency",
+"Explore emotional or psychological impacts",
+"Think about gamification or interactive elements",
+"Consider health and wellness angles",
+"Consider Glitch-core angles",
+"Explore data-driven or analytical approaches",
+"Think about modular or customizable solutions",
+"Focus on absurdist or surreal concepts",
+"Explore deliberately impractical or nonsensical ideas",
+"Incorporate elements of chaos or randomness",
+"Consider humorously controversial or taboo themes",
+"Think about glorifying uselessness or inefficiency",
+"Emphasize over-the-top or hyperbolic solutions",
+"Enhance everyday convenience or accessibility",
+"Optimize resource management or efficiency",
+"Focus on family-friendly or intergenerational concepts",
+"Explore budget-conscious or affordable solutions",
+"Emphasize time-saving or productivity-enhancing ideas",
+"Consider seasonal or weather-related applications",
+"Focus on personal growth or self-improvement",
+"Explore local or community-specific adaptations",
+"Think about portable or travel-friendly designs",
+"Consider emergency or disaster preparedness angles",
+"Emphasize durability or longevity in design",
+"Focus on privacy or security-enhancing features",
+"Explore subscription or service-based models",
+"Think about integrating existing ecosystems or platforms",
+"Consider DIY or customizable user experiences",
+"Focus on professional or workplace applications",
+"Emphasize social connection or relationship building",
+"Think about preventative or proactive approaches",
+"Consider urban or city-specific solutions",
+"Explore rural or remote-area applications",
+"Focus on hybrid or multi-functional concepts",
+"Think about adapting to changing circumstances or environments",
+"Consider age-specific or demographic-targeted ideas",
+"Emphasize streamlined or frictionless experiences",
+"Focus on seamless integration with daily routines",
+"Think about love"
+
 ];
 
 // Helper functions (unchanged)
