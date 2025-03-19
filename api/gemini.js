@@ -36,8 +36,12 @@ module.exports = async (req, res) => {
   // 2. Origin validation
   const origin = req.headers.origin || '';
   const allowedOrigins = [
-    // Vercel deployment URL (replace with your actual domain)
-    'https://your-app-domain.vercel.app',
+    // Production URL
+    'https://idea-generator-seven.vercel.app',
+    // Preview URL (this might change with each deployment)
+    'https://idea-generator-i5xfjg8ly-silmu.vercel.app',
+    // Any preview URLs with the pattern
+    /^https:\/\/idea-generator-.*-silmu\.vercel\.app$/,
     // Allow any localhost URL
     /^https?:\/\/localhost(:\d+)?$/
   ];
