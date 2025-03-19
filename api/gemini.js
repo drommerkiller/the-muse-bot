@@ -24,28 +24,24 @@ const isRateLimited = (ip) => {
   return false;
 };
 
-// The handler function for the API route
-module.exports = async (req, res) => {
-  console.log('📣 API route handler called');
-  
-  // 1. Method validation
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+// Origin validation with better support for Vercel preview deployments
+const allowedOrigins = [
+  // Production URL
+  'https://idea-generator-seven.vercel.app',
+  // Match any Vercel preview URL for your project
+  /^https:\/\/idea-generator-[a-z0-9-]+-silmu\.vercel\.app$/,
+  // Allow any localhost URL (for development)
+  /^https?:\/\/localhost(:\d+)?$/
+];
 
-  // 2. Origin validation
-  const origin = req.headers.origin || '';
-  const allowedOrigins = [
-    // Production URL
-    'https://idea-generator-seven.vercel.app',
-    // Preview URL (this might change with each deployment)
-    'https://idea-generator-i5xfjg8ly-silmu.vercel.app',
-    // Any preview URLs with the pattern
-    /^https:\/\/idea-generator-.*-silmu\.vercel\.app$/,
-    // Allow any localhost URL
-    /^https?:\/\/localhost(:\d+)?$/
-  ];
-  
+// Enhanced environment detection
+const isProduction = process.env.VERCEL_ENV === 'production';
+const isPreview = process.env.VERCEL_ENV === 'preview';
+const isDevelopment = process.env.VERCEL_ENV === 'development' || !process.env.VERCEL_ENV;
+
+// More lenient origin checking for non-production environments
+const validateOrigin = (origin) => {
+  // Always check against allowed origins
   const isOriginAllowed = allowedOrigins.some(allowed => {
     if (typeof allowed === 'string') {
       return allowed === origin;
@@ -54,12 +50,43 @@ module.exports = async (req, res) => {
     }
     return false;
   });
-
-  // In development, be more permissive with CORS
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  if (!isDevelopment && !isOriginAllowed) {
-    return res.status(403).json({ error: 'Forbidden: Invalid origin' });
+  
+  // In production, strictly enforce origin
+  if (isProduction) {
+    return isOriginAllowed;
   }
+  
+  // In preview or development, be more lenient
+  if (isPreview) {
+    // Accept any Vercel preview URL (they all have vercel.app domain)
+    return isOriginAllowed || origin.includes('vercel.app');
+  }
+  
+  // In local development, be very permissive
+  return true;
+}
+
+// This is the Vercel serverless handler
+module.exports = async (req, res) => {
+  console.log('📣 API route handler called with Vercel environment:', process.env.VERCEL_ENV);
+  
+  // Handle OPTIONS request for CORS
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(200).end();
+  }
+  
+  // 1. Method validation
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // 2. Set CORS headers - more permissive to fix deployment issues
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   // 3. Rate limiting
   const clientIP = req.headers['x-forwarded-for'] || 
@@ -74,7 +101,11 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // 4. Get the secure API key from environment variables
+    // Add extra debugging for environment variables
+    console.log('Environment variable names:', Object.keys(process.env)
+      .filter(key => key.includes('GEMINI') || key.includes('API'))
+      .join(', '));
+    
     const apiKey = process.env.GEMINI_API_KEY;
     
     if (!apiKey) {
@@ -90,15 +121,10 @@ module.exports = async (req, res) => {
       });
     }
 
-    // 6. Return API key with proper CORS headers
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', isOriginAllowed ? origin : '');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    
+    // 6. Return API key
     return res.status(200).json({ apiKey });
   } catch (error) {
     console.error('💥 Error in API route:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 }; 

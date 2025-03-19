@@ -107,8 +107,8 @@ CRITICAL: Your response MUST be a valid JSON object with EXACTLY the three requi
 DO NOT add any other text, explanations, or properties.`;
 
 // Constants for iteration control
-const MAX_ITERATIONS = 2;
-const MIN_ITERATIONS = 1;
+const MAX_ITERATIONS = 1;
+const MIN_ITERATIONS = 0;
 const IMPROVEMENT_THRESHOLD = 0.2; // 2% improvement
 
 // Creative directions for guiding generation

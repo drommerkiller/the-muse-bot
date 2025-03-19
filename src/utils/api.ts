@@ -26,6 +26,7 @@ export async function getSecureApiKey(): Promise<string> {
   // For production, use the secure API endpoint
   console.log('🔄 Using secure API endpoint (PRODUCTION)');
   try {
+    // The full URL path is important for Vercel - explicitly include /api/
     const response = await fetch('/api/gemini', {
       method: 'POST',
       headers: {
