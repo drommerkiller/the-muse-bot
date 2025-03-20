@@ -64,20 +64,20 @@ export const PromptInput: React.FC = () => {
     : "Enter your bad idea prompt...";
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-3xl space-y-2">
+    <form onSubmit={handleSubmit} className="w-full max-w-full sm:max-w-3xl space-y-2">
       <div className="relative">
         <textarea
           value={prompt}
           onChange={handlePromptChange}
           placeholder={placeholderText}
-          className={`w-full p-4 pr-24 text-sm text-gray-200 border rounded-lg bg-gray-800 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-900 disabled:cursor-not-allowed ${
+          className={`w-full p-3 sm:p-4 pr-16 sm:pr-24 text-xs sm:text-sm text-gray-200 border rounded-lg bg-gray-800 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-900 disabled:cursor-not-allowed ${
             validationError ? 'border-red-500' : 'border-gray-700'
           }`}
-          rows={4}
+          rows={3}
           disabled={isLoading}
         />
-        <div className="absolute right-2.5 bottom-2.5 flex items-center space-x-2">
-          <span className={`text-sm ${
+        <div className="absolute right-2 sm:right-2.5 bottom-2 sm:bottom-2.5 flex items-center space-x-1 sm:space-x-2">
+          <span className={`text-xs sm:text-sm ${
             charCount > MAX_CHARS - 50 
               ? 'text-red-400' 
               : charCount > MAX_CHARS - 100 
@@ -89,20 +89,20 @@ export const PromptInput: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitDisabled}
-            className="text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-800 font-medium rounded-lg text-sm px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+            className="text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-800 font-medium rounded-lg text-xs sm:text-sm px-2 sm:px-4 py-1.5 sm:py-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
           >
             {isLoading ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+              <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-white" />
             ) : (
-              <Send className="w-5 h-5" />
+              <Send className="w-4 h-4 sm:w-5 sm:h-5" />
             )}
           </button>
         </div>
       </div>
       
       {(validationError || error) && (
-        <div className="flex items-start space-x-2 text-red-400 text-sm p-2 bg-red-900/30 rounded-lg border border-red-800">
-          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start space-x-2 text-red-400 text-xs sm:text-sm p-2 bg-red-900/30 rounded-lg border border-red-800">
+          <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5" />
           <span>{validationError || error}</span>
         </div>
       )}

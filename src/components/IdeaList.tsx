@@ -19,13 +19,13 @@ export const IdeaList: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="w-full max-w-3xl">
-        <div className="bg-gray-800 rounded-lg shadow-lg shadow-gray-900/30 p-6 space-y-4 border border-gray-700">
-          <div className="animate-pulse space-y-4">
-            <div className="h-4 bg-gray-700 rounded w-3/4"></div>
-            <div className="space-y-2">
-              <div className="h-4 bg-gray-700 rounded"></div>
-              <div className="h-4 bg-gray-700 rounded w-5/6"></div>
+      <div className="w-full max-w-full sm:max-w-3xl">
+        <div className="bg-gray-800 rounded-lg shadow-lg shadow-gray-900/30 p-4 sm:p-6 space-y-3 sm:space-y-4 border border-gray-700">
+          <div className="animate-pulse space-y-3 sm:space-y-4">
+            <div className="h-3 sm:h-4 bg-gray-700 rounded w-3/4"></div>
+            <div className="space-y-1 sm:space-y-2">
+              <div className="h-3 sm:h-4 bg-gray-700 rounded"></div>
+              <div className="h-3 sm:h-4 bg-gray-700 rounded w-5/6"></div>
             </div>
           </div>
         </div>
@@ -36,40 +36,40 @@ export const IdeaList: React.FC = () => {
   if (!conversation?.ideas.length) return null;
 
   return (
-    <div className="w-full max-w-3xl space-y-6">
+    <div className="w-full max-w-full sm:max-w-3xl space-y-4 sm:space-y-6">
      
       {/* Debug Section - Only shown in development */}
       {isDevelopment && (
-        <div className="bg-gray-900 text-gray-200 rounded-lg shadow-lg shadow-black/30 p-6 space-y-4 font-mono text-sm border border-gray-800">
+        <div className="bg-gray-900 text-gray-200 rounded-lg shadow-lg shadow-black/30 p-4 sm:p-6 space-y-3 sm:space-y-4 font-mono text-xs sm:text-sm border border-gray-800">
           <div>
-            <h2 className="text-xl font-bold mb-2 text-green-400">🔍 Debug Output</h2>
-            <div className="space-y-4">
+            <h2 className="text-lg sm:text-xl font-bold mb-2 text-green-400">🔍 Debug Output</h2>
+            <div className="space-y-3 sm:space-y-4">
               <div>
                 <h3 className="text-yellow-400">Original Prompt:</h3>
-                <pre className="whitespace-pre-wrap">{conversation.prompt}</pre>
+                <pre className="whitespace-pre-wrap overflow-x-auto">{conversation.prompt}</pre>
               </div>
               
               <div>
                 <h3 className="text-yellow-400">Enhanced Prompt:</h3>
-                <pre className="whitespace-pre-wrap">{conversation.enhancedPrompt}</pre>
+                <pre className="whitespace-pre-wrap overflow-x-auto">{conversation.enhancedPrompt}</pre>
               </div>
 
               <div>
                 <h3 className="text-yellow-400">Initial Ideas:</h3>
-                <pre className="whitespace-pre-wrap">{conversation.firstIterationResponse}</pre>
+                <pre className="whitespace-pre-wrap overflow-x-auto">{conversation.firstIterationResponse}</pre>
               </div>
 
               <div>
                 <h3 className="text-yellow-400">Initial Feedback:</h3>
-                <pre className="whitespace-pre-wrap">{conversation.firstIterationFeedback}</pre>
+                <pre className="whitespace-pre-wrap overflow-x-auto">{conversation.firstIterationFeedback}</pre>
               </div>
 
               <div>
                 <h3 className="text-yellow-400">Iteration History:</h3>
                 {conversation.iterationHistory.map((iteration, index) => (
-                  <div key={index} className="mt-4 border-t border-gray-700 pt-4">
+                  <div key={index} className="mt-3 sm:mt-4 border-t border-gray-700 pt-3 sm:pt-4">
                     <h4 className="text-blue-400">Iteration {index + 1}</h4>
-                    <div className="pl-4 space-y-2">
+                    <div className="pl-2 sm:pl-4 space-y-1 sm:space-y-2">
                       <div>
                         <span className="text-gray-400">Score: </span>
                         <span className="text-green-400">{iteration.score}</span>
@@ -80,13 +80,13 @@ export const IdeaList: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-gray-400">Ideas:</span>
-                        <pre className="whitespace-pre-wrap text-gray-200 mt-2">
+                        <pre className="whitespace-pre-wrap overflow-x-auto text-gray-200 mt-1 sm:mt-2">
                           {JSON.stringify(iteration.ideas, null, 2)}
                         </pre>
                       </div>
                       <div>
                         <span className="text-gray-400">Feedback:</span>
-                        <pre className="whitespace-pre-wrap text-gray-200 mt-2">{iteration.feedback}</pre>
+                        <pre className="whitespace-pre-wrap overflow-x-auto text-gray-200 mt-1 sm:mt-2">{iteration.feedback}</pre>
                       </div>
                     </div>
                   </div>
@@ -95,7 +95,7 @@ export const IdeaList: React.FC = () => {
 
               <div>
                 <h3 className="text-yellow-400">Final Stats:</h3>
-                <pre className="whitespace-pre-wrap">
+                <pre className="whitespace-pre-wrap overflow-x-auto">
                   Total Iterations: {conversation.iteration}
                   Best Score: {conversation.bestScore}
                   Improvement Threshold Met: {conversation.improvementThresholdMet ? 'Yes' : 'No'}
@@ -107,22 +107,22 @@ export const IdeaList: React.FC = () => {
       )}
 
       {/* Ideas Section */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-gray-100">
+      <div className="space-y-3 sm:space-y-4">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-100">
           {mode === 'good' ? 'Final Ideas' : 'Ideas?'}
         </h2>
         {conversation.ideas.map((idea) => (
-          <div key={idea.id} className="bg-gray-800 rounded-lg shadow-lg shadow-gray-900/30 p-6 border border-gray-700 transition-all hover:border-indigo-500">
-            <h3 className="text-xl font-bold mb-3 text-gray-100">{idea.title}</h3>
-            <div className="prose prose-invert max-w-none space-y-4">
+          <div key={idea.id} className="bg-gray-800 rounded-lg shadow-lg shadow-gray-900/30 p-4 sm:p-6 border border-gray-700 transition-all hover:border-indigo-500">
+            <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3 text-gray-100">{idea.title}</h3>
+            <div className="prose prose-sm sm:prose prose-invert max-w-none space-y-2 sm:space-y-4">
               {idea.description.split('\n\n').map((paragraph, index) => (
-                <p key={index} className="text-gray-300 leading-relaxed">
+                <p key={index} className="text-sm sm:text-base text-gray-300 leading-relaxed">
                   {paragraph}
                 </p>
               ))}
             </div>
             {idea.rating > 0 && (
-              <div className="mt-4 text-sm font-medium text-gray-400">
+              <div className="mt-3 sm:mt-4 text-xs sm:text-sm font-medium text-gray-400">
                 Rating: <span className="text-indigo-400">{idea.rating}/100</span>
               </div>
             )}
