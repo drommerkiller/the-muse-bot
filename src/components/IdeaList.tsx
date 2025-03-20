@@ -1,21 +1,31 @@
 import React from 'react';
 import { useAI } from '../context/AIContext';
+import { useAI as useBadAI } from '../context/BadAIContext';
+import { useMode } from '../context/ModeContext';
 import ReactMarkdown from 'react-markdown';
 
 export const IdeaList: React.FC = () => {
-  const { conversation, isLoading } = useAI();
+  const { mode } = useMode();
+  const goodContext = useAI();
+  const badContext = useBadAI();
+  
+  // Use the appropriate context based on mode
+  const { conversation, isLoading } = mode === 'good' 
+    ? goodContext 
+    : badContext;
+    
   // Check if we're in development environment
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const isDevelopment = import.meta.env.DEV;
 
   if (isLoading) {
     return (
       <div className="w-full max-w-3xl">
-        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <div className="bg-gray-800 rounded-lg shadow-lg shadow-gray-900/30 p-6 space-y-4 border border-gray-700">
           <div className="animate-pulse space-y-4">
-            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+            <div className="h-4 bg-gray-700 rounded w-3/4"></div>
             <div className="space-y-2">
-              <div className="h-4 bg-gray-200 rounded"></div>
-              <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+              <div className="h-4 bg-gray-700 rounded"></div>
+              <div className="h-4 bg-gray-700 rounded w-5/6"></div>
             </div>
           </div>
         </div>
@@ -30,7 +40,7 @@ export const IdeaList: React.FC = () => {
      
       {/* Debug Section - Only shown in development */}
       {isDevelopment && (
-        <div className="bg-gray-800 text-white rounded-lg shadow p-6 space-y-4 font-mono text-sm">
+        <div className="bg-gray-900 text-gray-200 rounded-lg shadow-lg shadow-black/30 p-6 space-y-4 font-mono text-sm border border-gray-800">
           <div>
             <h2 className="text-xl font-bold mb-2 text-green-400">🔍 Debug Output</h2>
             <div className="space-y-4">
@@ -70,13 +80,13 @@ export const IdeaList: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-gray-400">Ideas:</span>
-                        <pre className="whitespace-pre-wrap text-white mt-2">
+                        <pre className="whitespace-pre-wrap text-gray-200 mt-2">
                           {JSON.stringify(iteration.ideas, null, 2)}
                         </pre>
                       </div>
                       <div>
                         <span className="text-gray-400">Feedback:</span>
-                        <pre className="whitespace-pre-wrap text-white mt-2">{iteration.feedback}</pre>
+                        <pre className="whitespace-pre-wrap text-gray-200 mt-2">{iteration.feedback}</pre>
                       </div>
                     </div>
                   </div>
@@ -98,20 +108,22 @@ export const IdeaList: React.FC = () => {
 
       {/* Ideas Section */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-gray-900">Final Ideas</h2>
+        <h2 className="text-2xl font-bold text-gray-100">
+          {mode === 'good' ? 'Final Ideas' : 'Ideas?'}
+        </h2>
         {conversation.ideas.map((idea) => (
-          <div key={idea.id} className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-xl font-bold mb-3 text-gray-900">{idea.title}</h3>
-            <div className="prose max-w-none space-y-4">
+          <div key={idea.id} className="bg-gray-800 rounded-lg shadow-lg shadow-gray-900/30 p-6 border border-gray-700 transition-all hover:border-indigo-500">
+            <h3 className="text-xl font-bold mb-3 text-gray-100">{idea.title}</h3>
+            <div className="prose prose-invert max-w-none space-y-4">
               {idea.description.split('\n\n').map((paragraph, index) => (
-                <p key={index} className="text-gray-700 leading-relaxed">
+                <p key={index} className="text-gray-300 leading-relaxed">
                   {paragraph}
                 </p>
               ))}
             </div>
             {idea.rating > 0 && (
-              <div className="mt-4 text-sm font-medium text-gray-600">
-                Rating: {idea.rating}/100
+              <div className="mt-4 text-sm font-medium text-gray-400">
+                Rating: <span className="text-indigo-400">{idea.rating}/100</span>
               </div>
             )}
           </div>
